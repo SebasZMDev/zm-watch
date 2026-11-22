@@ -1,0 +1,59 @@
+{
+  "name": "zm-watch",
+  "displayName": "ZM Watch",
+  "description": "Abre un diff lado a lado cuando un archivo cambia desde fuera del editor.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "zmWatch.toggle",
+        "title": "ZM Watch: Activar o desactivar"
+      }
+    ],
+    "configuration": {
+      "title": "ZM Watch",
+      "properties": {
+        "zmWatch.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Abrir un diff cuando un archivo cambia desde fuera del editor."
+        },
+        "zmWatch.maxTabs": { "type": "number", "default": 8, "minimum": 1, "description": "Máximo de pestañas de diff abiertas; al superarlo se cierra la más antigua." },
+        "zmWatch.ignore": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "node_modules",
+            ".git",
+            ".next",
+            ".superpowers",
+            "dist",
+            "out"
+          ],
+          "description": "Nombres de carpeta o archivo que se ignoran."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "tsx --test src/core/snapshot-store.test.ts src/core/ignore.test.ts src/core/debouncer.test.ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.9.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
