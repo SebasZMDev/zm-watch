@@ -3,6 +3,8 @@ import * as path from "node:path";
 import { SnapshotStore } from "./core/snapshot-store";
 import { shouldIgnore } from "./core/ignore";
 import { Debouncer } from "./core/debouncer";
+import { RateLimiter } from "./core/rate-limiter";
+import { TabOrder } from "./core/tab-order";
 import { OriginalProvider } from "./original-provider";
 
 const MAX_FILE_BYTES = 1024 * 1024;
@@ -20,18 +22,26 @@ export function activate(context: vscode.ExtensionContext): void {
   const config = () => vscode.workspace.getConfiguration("zmWatch");
   let ignore = config().get<string[]>("ignore", []);
   let version = 0;
-  let recentDiffs: number[] = [];
-  const order: string[] = [];
+  const limiter = new RateLimiter(MAX_DIFFS_PER_SECOND, 1000);
+  const order = new TabOrder();
+  const savedByEditor = new Map<string, number>();
+  let skipped = 0;
+  let skippedTimer: ReturnType<typeof setTimeout> | undefined;
+  let refreshStatus = () => {};
 
-  const closeDiffTab = async (fsPath: string) => {
-    const tabs = vscode.window.tabGroups.all
+  const diffTabs = () =>
+    vscode.window.tabGroups.all
       .flatMap((g) => g.tabs)
       .filter(
         (t) =>
           t.input instanceof vscode.TabInputTextDiff &&
-          t.input.original.scheme === OriginalProvider.scheme &&
-          t.input.modified.fsPath === fsPath,
+          t.input.original.scheme === OriginalProvider.scheme,
       );
+
+  const closeDiffTab = async (fsPath: string) => {
+    const tabs = diffTabs().filter(
+      (t) => (t.input as vscode.TabInputTextDiff).modified.fsPath === fsPath,
+    );
     if (tabs.length > 0) {
       await vscode.window.tabGroups.close(tabs);
     }
@@ -62,14 +72,14 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   void prime();
 
-  const canOpenDiff = (): boolean => {
-    const now = Date.now();
-    recentDiffs = recentDiffs.filter((t) => now - t < 1000);
-    if (recentDiffs.length >= MAX_DIFFS_PER_SECOND) {
-      return false;
-    }
-    recentDiffs.push(now);
-    return true;
+  const noteSkipped = () => {
+    skipped++;
+    refreshStatus();
+    clearTimeout(skippedTimer);
+    skippedTimer = setTimeout(() => {
+      skipped = 0;
+      refreshStatus();
+    }, 10000);
   };
 
   const handleChange = async (fsPath: string) => {
@@ -83,7 +93,20 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
     store.set(fsPath, next);
-    if (!config().get<boolean>("enabled", true) || !canOpenDiff()) {
+    if (!config().get<boolean>("enabled", true)) {
+      return;
+    }
+    const savedAt = savedByEditor.get(fsPath);
+    savedByEditor.delete(fsPath);
+    if (
+      config().get<boolean>("ignoreEditorSaves", true) &&
+      savedAt !== undefined &&
+      Date.now() - savedAt < 2000
+    ) {
+      return;
+    }
+    if (!limiter.tryAcquire(Date.now())) {
+      noteSkipped();
       return;
     }
     const name = path.basename(fsPath);
@@ -94,11 +117,6 @@ export function activate(context: vscode.ExtensionContext): void {
     });
     provider.set(left, prev);
     await closeDiffTab(fsPath);
-    const at = order.indexOf(fsPath);
-    if (at >= 0) {
-      order.splice(at, 1);
-    }
-    order.push(fsPath);
     await vscode.commands.executeCommand(
       "vscode.diff",
       left,
@@ -106,9 +124,11 @@ export function activate(context: vscode.ExtensionContext): void {
       `ZM Watch: ${name} (antes ↔ ahora)`,
       { preview: false, preserveFocus: true },
     );
+    order.touch(fsPath);
+    order.prune(new Set(diffTabs().map((t) => (t.input as vscode.TabInputTextDiff).modified.fsPath)));
     const max = Math.max(1, config().get<number>("maxTabs", 8));
-    while (order.length > max) {
-      await closeDiffTab(order.shift() as string);
+    for (const old of order.overflow(max)) {
+      await closeDiffTab(old);
     }
   };
 
@@ -128,17 +148,20 @@ export function activate(context: vscode.ExtensionContext): void {
     watcher.onDidChange(onEvent),
     watcher.onDidCreate(onEvent),
     watcher.onDidDelete((uri) => store.delete(uri.fsPath)),
-    { dispose: () => debouncer?.dispose() },
+    vscode.workspace.onDidSaveTextDocument((doc) => savedByEditor.set(doc.uri.fsPath, Date.now())),
+    { dispose: () => { debouncer?.dispose(); clearTimeout(skippedTimer); } },
   );
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBar.command = "zmWatch.toggle";
-  const refreshStatus = () => {
+  refreshStatus = () => {
     const on = config().get<boolean>("enabled", true);
-    statusBar.text = on ? "$(eye) ZM Watch" : "$(eye-closed) ZM Watch";
-    statusBar.tooltip = on
-      ? "ZM Watch activo: clic para desactivar"
-      : "ZM Watch desactivado: clic para activar";
+    const extra = skipped > 0 ? ` +${skipped}` : "";
+    statusBar.text = (on ? "$(eye) ZM Watch" : "$(eye-closed) ZM Watch") + extra;
+    statusBar.tooltip =
+      (on ? "ZM Watch activo: clic para desactivar" : "ZM Watch desactivado: clic para activar") +
+      (skipped > 0 ? `
+${skipped} cambios sin mostrar (demasiados por segundo)` : "");
   };
   refreshStatus();
   statusBar.show();

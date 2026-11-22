@@ -2,7 +2,10 @@
   "name": "zm-watch",
   "displayName": "ZM Watch",
   "description": "Abre un diff lado a lado cuando un archivo cambia desde fuera del editor.",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "publisher": "SebasZMDev",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/SebasZMDev/zm-watch.git" },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -26,6 +29,7 @@
           "description": "Abrir un diff cuando un archivo cambia desde fuera del editor."
         },
         "zmWatch.maxTabs": { "type": "number", "default": 8, "minimum": 1, "description": "Máximo de pestañas de diff abiertas; al superarlo se cierra la más antigua." },
+        "zmWatch.ignoreEditorSaves": { "type": "boolean", "default": true, "description": "No abrir diff cuando el cambio viene de guardar desde el propio editor." },
         "zmWatch.ignore": {
           "type": "array",
           "items": {
@@ -46,7 +50,7 @@
   },
   "scripts": {
     "compile": "tsc -p .",
-    "test": "tsx --test src/core/snapshot-store.test.ts src/core/ignore.test.ts src/core/debouncer.test.ts",
+    "test": "tsx --test src/core/snapshot-store.test.ts src/core/ignore.test.ts src/core/debouncer.test.ts src/core/rate-limiter.test.ts src/core/tab-order.test.ts",
     "package": "vsce package"
   },
   "devDependencies": {

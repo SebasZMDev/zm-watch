@@ -4,8 +4,8 @@ Extensión de VS Code para **mirar**, no para escribir. Cuando un archivo del pr
 
 ## Instalación
 
-1. `npm install && npm run package` genera `zm-watch-0.0.1.vsix`.
-2. `code --install-extension zm-watch-0.0.1.vsix`, o en VS Code: "Extensions: Install from VSIX...".
+1. `npm install && npm run package` genera `zm-watch-0.1.0.vsix`.
+2. `code --install-extension zm-watch-0.1.0.vsix`, o en VS Code: "Extensions: Install from VSIX...".
 
 ## Uso
 
@@ -16,6 +16,7 @@ Extensión de VS Code para **mirar**, no para escribir. Cuando un archivo del pr
 
 - `zmWatch.enabled`: activa o desactiva la extensión (por defecto `true`).
 - `zmWatch.maxTabs`: máximo de pestañas de diff abiertas (por defecto `8`).
+- `zmWatch.ignoreEditorSaves`: no abre diff cuando el cambio viene de guardar desde el propio editor (por defecto `true`).
 - `zmWatch.ignore`: nombres de carpeta o archivo que se ignoran (por defecto `node_modules`, `.git`, `.next`, `.superpowers`, `dist`, `out`).
 
 ## Limitaciones
@@ -23,4 +24,8 @@ Extensión de VS Code para **mirar**, no para escribir. Cuando un archivo del pr
 - El diff aparece cuando el archivo se guarda en disco, no letra por letra.
 - No maneja archivos binarios ni mayores a 1 MB.
 - Las copias en memoria tienen tope: 2000 archivos y 20 MB.
-- Se abren como máximo 5 diffs por segundo.
+- Se abren como máximo 5 diffs por segundo; los demás se cuentan junto al ojo de la barra de estado (`+N`).
+
+## Licencia
+
+MIT.
